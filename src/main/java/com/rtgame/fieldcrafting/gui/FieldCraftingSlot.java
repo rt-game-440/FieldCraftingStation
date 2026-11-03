@@ -85,5 +85,8 @@ public class FieldCraftingSlot extends ModularCraftingSlot {
             }
         }
         matrix.notifyContainer();
+        if (server && matrix.getContainer() instanceof FieldStationContainer container) {
+            container.forceSyncGrid();
+        }
     }
 }

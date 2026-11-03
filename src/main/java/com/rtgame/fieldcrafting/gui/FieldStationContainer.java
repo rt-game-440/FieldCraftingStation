@@ -92,6 +92,21 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
         }
     }
 
+    /**
+     * 强制把合成网格的各格同步给客户端。取走成品后服务端会补料，网格内容可能与取之前完全一样，
+     * 原版的变化检测发现不了差异，而客户端已经预测性地清空了网格，所以必须强制同步。
+     */
+    public void forceSyncGrid() {
+        for (Object o : inventorySlots) {
+            if (o instanceof ModularSlot slot && slot != craftingSlot
+                && slot.getItemHandler() == tile.getGrid()
+                && slot.getSyncHandler() != null) {
+                slot.getSyncHandler()
+                    .forceSyncItem();
+            }
+        }
+    }
+
     private void refreshResult() {
         if (craftingSlot == null || getPlayer() == null || getPlayer().worldObj.isRemote) return;
         craftingSlot.updateResult(

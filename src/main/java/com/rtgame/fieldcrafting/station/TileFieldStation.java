@@ -12,9 +12,11 @@ import net.minecraftforge.common.util.ForgeDirection;
 import com.cleanroommc.modularui.api.IGuiHolder;
 import com.cleanroommc.modularui.factory.PosGuiData;
 import com.cleanroommc.modularui.screen.ModularPanel;
+import com.cleanroommc.modularui.screen.ModularScreen;
 import com.cleanroommc.modularui.screen.UISettings;
 import com.cleanroommc.modularui.utils.item.ItemStackHandler;
 import com.cleanroommc.modularui.value.sync.PanelSyncManager;
+import com.rtgame.fieldcrafting.FieldCrafting;
 import com.rtgame.fieldcrafting.field.FieldContainer;
 import com.rtgame.fieldcrafting.field.FieldInventory;
 import com.rtgame.fieldcrafting.field.FieldScanner;
@@ -156,6 +158,11 @@ public class TileFieldStation extends TileEntity implements IEnergyConnected, IG
     }
 
     // ---------------------------------------------------------------- 界面
+
+    @Override
+    public ModularScreen createScreen(PosGuiData data, ModularPanel mainPanel) {
+        return new ModularScreen(FieldCrafting.MODID, mainPanel);
+    }
 
     @Override
     public ModularPanel buildUI(PosGuiData data, PanelSyncManager syncManager, UISettings settings) {

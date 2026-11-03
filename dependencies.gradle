@@ -34,11 +34,11 @@
  * For more details, see https://docs.gradle.org/8.0.1/userguide/java_library_plugin.html#sec:java_library_configurations_graph
  */
 dependencies {
-    // 以下依赖版本与本地 GTNH 2.9.0 实例保持一致，运行时由实例提供，因此只参与编译
-    compileOnly("com.github.GTNewHorizons:GT5-Unofficial:5.09.54.265:dev")
-    compileOnly("com.github.GTNewHorizons:GTNHLib:0.11.54:dev")
-    compileOnly("com.github.GTNewHorizons:NotEnoughItems:2.8.171-GTNH:dev")
-    compileOnly("com.github.GTNewHorizons:ModularUI2:2.3.94-1.7.10:dev")
+    // 以下依赖版本与本地 GTNH 2.9.0 实例保持一致；devOnlyNonPublishable 让开发客户端（runClient）也能加载它们，且不会发布为依赖
+    devOnlyNonPublishable("com.github.GTNewHorizons:GT5-Unofficial:5.09.54.265:dev")
+    devOnlyNonPublishable("com.github.GTNewHorizons:GTNHLib:0.11.54:dev")
+    devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.171-GTNH:dev")
+    devOnlyNonPublishable("com.github.GTNewHorizons:ModularUI2:2.3.94-1.7.10:dev")
 
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")

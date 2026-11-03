@@ -14,6 +14,7 @@ import com.cleanroommc.modularui.api.UpOrDown;
 import com.cleanroommc.modularui.api.drawable.IKey;
 import com.cleanroommc.modularui.api.widget.Interactable;
 import com.cleanroommc.modularui.drawable.GuiDraw;
+import com.cleanroommc.modularui.integration.recipeviewer.RecipeViewerIngredientProvider;
 import com.cleanroommc.modularui.screen.RichTooltip;
 import com.cleanroommc.modularui.screen.viewport.ModularGuiContext;
 import com.cleanroommc.modularui.theme.WidgetThemeEntry;
@@ -30,7 +31,7 @@ import com.cleanroommc.modularui.widget.Widget;
  * </ul>
  * 真正的存取由服务端完成，这里只发送点击事件并展示服务端推来的内容。
  */
-public class FieldListWidget extends Widget<FieldListWidget> implements Interactable {
+public class FieldListWidget extends Widget<FieldListWidget> implements Interactable, RecipeViewerIngredientProvider {
 
     public static final int COLUMNS = 9;
     public static final int CELL = 18;
@@ -198,5 +199,14 @@ public class FieldListWidget extends Widget<FieldListWidget> implements Interact
         int step = Math.max(1, Math.abs(amount));
         scrollRow = Math.max(0, Math.min(max, scrollRow + (scrollDirection == UpOrDown.UP ? -step : step)));
         return true;
+    }
+
+    /** 给 NEI 的 R / U / A 等快捷键提供鼠标下的物品。 */
+    @Override
+    public ItemStack getStackForRecipeViewer() {
+        if (!sync.isPowered()) return null;
+        List<FieldListSync.Entry> list = filtered();
+        int idx = indexAt(getContext().getMouseX(), getContext().getMouseY(), list.size());
+        return idx < 0 ? null : list.get(idx).stack.copy();
     }
 }
