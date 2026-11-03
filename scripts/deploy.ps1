@@ -8,15 +8,15 @@
   3. 复制新构建的 jar（不含 -dev / -sources）到 mods 目录
 
 .PARAMETER ModsDir
-  实例 mods 目录，默认 D:\mc\Prism-GTNH\instances\GTNH-2.9.0-RC-2\.minecraft\mods
+  实例 mods 目录（必填）。建议使用专用测试实例，不要指向正在游玩的实例。
 
 .EXAMPLE
-  .\scripts\deploy.ps1
-  .\scripts\deploy.ps1 -SkipTests
-  .\scripts\deploy.ps1 -ModsDir "D:\other\instance\.minecraft\mods"
+  .\scripts\deploy.ps1 -ModsDir "D:\test\instance\.minecraft\mods"
+  .\scripts\deploy.ps1 -ModsDir "D:\test\instance\.minecraft\mods" -SkipTests
 #>
 param(
-    [string]$ModsDir = 'D:\mc\Prism-GTNH\instances\GTNH-2.9.0-RC-2\.minecraft\mods',
+    [Parameter(Mandatory = $true)]
+    [string]$ModsDir,
     [switch]$SkipTests
 )
 

@@ -109,7 +109,9 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
     @Override
     public ItemStack transferStackInSlot(@NotNull EntityPlayer player, int index) {
         ModularSlot slot = getModularSlot(index);
-        if (ModularSlot.isPlayerSlot(slot) && listSync != null) {
+        boolean powered = player.worldObj.isRemote ? listSync != null && listSync.isPowered() : tile.isPowered();
+        // 断电时降级为普通工作台，Shift+点击走默认逻辑
+        if (powered && ModularSlot.isPlayerSlot(slot) && listSync != null) {
             if (player.worldObj.isRemote) return null; // 客户端不预测，等服务端同步
             ItemStack stack = slot.getStack();
             if (Stacks.isEmpty(stack)) return null;

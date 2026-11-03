@@ -22,15 +22,12 @@ GTNH（GregTech: New Horizons）2.9.0 的附属 mod。添加一种特殊工作�
 
 ## 部署到本地 GTNH 实例
 
-`scripts/deploy.ps1` 会构建 jar、删除实例里旧的 `fieldcrafting-*.jar`、复制新 jar 到实例的 mods 目录：
+`scripts/deploy.ps1` 会构建 jar、删除实例里旧的 `fieldcrafting-*.jar`、复制新 jar 到实例的 mods 目录。`-ModsDir` 必填，建议指向专用测试实例，不要用正在游玩的实例：
 
 ```powershell
-.\scripts\deploy.ps1                                  # 构建（含测试）并部署
-.\scripts\deploy.ps1 -SkipTests                       # 跳过测试，加快部署
-.\scripts\deploy.ps1 -ModsDir "D:\other\.minecraft\mods"   # 部署到其他实例
+.\scripts\deploy.ps1 -ModsDir "D:\test\instance\.minecraft\mods"              # 构建（含测试）并部署
+.\scripts\deploy.ps1 -ModsDir "D:\test\instance\.minecraft\mods" -SkipTests   # 跳过测试，加快部署
 ```
-
-默认 mods 目录为 `D:\mc\Prism-GTNH\instances\GTNH-2.9.0-RC-2\.minecraft\mods`。
 
 ## 占位贴图
 
