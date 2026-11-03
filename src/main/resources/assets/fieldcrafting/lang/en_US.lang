@@ -1,0 +1,15 @@
+itemGroup.fieldcrafting=Field Crafting Station
+tile.fieldcrafting.station.lv.name=Field Crafting Station (LV)
+tile.fieldcrafting.station.mv.name=Field Crafting Station (MV)
+tile.fieldcrafting.station.hv.name=Field Crafting Station (HV)
+tile.fieldcrafting.station.ev.name=Field Crafting Station (EV)
+tile.fieldcrafting.station.iv.name=Field Crafting Station (IV)
+fieldcrafting.gui.unpowered=No Power
+fieldcrafting.gui.powered=Powered
+fieldcrafting.gui.empty=No items in range
+fieldcrafting.gui.count=Count: %d
+fieldcrafting.gui.no_container=No containers in range
+fieldcrafting.gui.view.summary=All
+fieldcrafting.gui.view.summary.tip=Summary view: identical items from all containers are merged
+fieldcrafting.gui.view.container=Each
+fieldcrafting.gui.view.container.tip=Per-container view: browse one container at a time

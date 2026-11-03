@@ -82,3 +82,12 @@ GTNH 2.9.0 正式版的附属 mod。术语见 `GLOSSARY.md`。
 ## 7. 待核实
 
 实现前对照实例核实配方里的物品是否存在、名称是否一致，尤其是镓板、脉冲合金板、铈板、红石合金导线，以及各档超导线和力场发生器。有出入时回来确认，不自行替换。
+
+### 核实结果（2026-11-03，GT 5.09.54.265）
+
+- 脉冲合金板：中文「脉冲合金」对应 `Materials.VibrantAlloy`（`PulsatingIron` 的中文是「脉冲铁」），已与用户确认使用 VibrantAlloy。
+- 红石合金导线：`wireGt01` + `Materials.RedstoneAlloy`（`RedAlloy` 中文是「红色合金」），已与用户确认。
+- MV 电路板：使用矿辞 `circuitGood`（MV 优质电子电路，兼容各种基板制作的版本），已与用户确认。
+- 超导线：`wireGt01` + `Materials.SuperconductorMV/HV/EV/IV`；力场发生器：`ItemList.Field_Generator_LV..EV`；机器外壳：`ItemList.Hull_LV..IV`；板：镓/钽/铟/铈使用对应 `Materials` 的 `plate`。
+- 若运行时某材料取不到物品，会在日志输出「场域合成站 x 档配方材料缺失，已跳过」。
+

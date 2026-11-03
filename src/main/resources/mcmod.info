@@ -1,0 +1,14 @@
+[{
+	"modid": "${modId}",
+	"name": "${modName}",
+	"description": "GTNH 附属 mod：可识别周边容器并直接用于合成与 IO 的场域合成站。",
+	"version": "${modVersion}",
+	"mcversion": "${minecraftVersion}",
+	"url": "https://github.com/rt-game-440/FieldCraftingStation",
+	"authorList": ["RT_Game"],
+	"credits": "",
+	"logoFile": "",
+	"screenshots": [],
+	"parent": "",
+	"dependencies": ["gregtech", "gtnhlib", "NotEnoughItems", "modularui2"]
+}]
