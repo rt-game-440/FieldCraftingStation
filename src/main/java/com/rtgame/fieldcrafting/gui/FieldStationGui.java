@@ -89,9 +89,7 @@ public final class FieldStationGui {
                 .size(132, 8)
                 .setEnabledIf(w -> list.getView() == FieldListSync.VIEW_CONTAINER));
 
-        panel.child(
-            new FieldListWidget(list, filter::getStringValue).pos(7, 44)
-                .size(FieldListWidget.COLUMNS * CELL_WIDTH + 8, 8 * CELL_WIDTH));
+        panel.child(new FieldListWidget(list, filter::getStringValue).pos(7, 44));
 
         // ---- 右侧：合成 ----
         panel.child(
@@ -116,8 +114,6 @@ public final class FieldStationGui {
                 .pos(RIGHT, 118));
         return panel;
     }
-
-    private static final int CELL_WIDTH = FieldListWidget.CELL;
 
     private static void cycle(FieldListSync list, int delta) {
         int n = list.getContainers()

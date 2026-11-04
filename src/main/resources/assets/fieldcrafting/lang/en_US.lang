@@ -7,7 +7,6 @@ tile.fieldcrafting.station.iv.name=Field Crafting Station (IV)
 fieldcrafting.gui.unpowered=No Power
 fieldcrafting.gui.powered=Powered
 fieldcrafting.gui.empty=No items in range
-fieldcrafting.gui.count=Count: %d
 fieldcrafting.gui.no_container=No containers in range
 fieldcrafting.gui.view.summary=All
 fieldcrafting.gui.view.summary.tip=Summary view: identical items from all containers are merged

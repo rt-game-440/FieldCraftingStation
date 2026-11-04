@@ -7,7 +7,6 @@ tile.fieldcrafting.station.iv.name=场域合成站（IV）
 fieldcrafting.gui.unpowered=电力不足
 fieldcrafting.gui.powered=供电正常
 fieldcrafting.gui.empty=范围内没有物品
-fieldcrafting.gui.count=数量：%d
 fieldcrafting.gui.no_container=范围内没有容器
 fieldcrafting.gui.view.summary=汇总
 fieldcrafting.gui.view.summary.tip=汇总视图：所有容器里的同种物品合并显示

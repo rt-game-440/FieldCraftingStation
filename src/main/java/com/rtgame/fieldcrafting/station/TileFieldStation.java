@@ -60,10 +60,6 @@ public class TileFieldStation extends TileEntity implements IEnergyConnected, IG
         return powered;
     }
 
-    public long getStoredEnergy() {
-        return stored;
-    }
-
     /**
      * 为玩家创建场域库存。供电正常时包含邻近容器；断电时只剩玩家背包，
      * 这样合成、填充都会自动降级为普通工作台的行为。

@@ -18,10 +18,9 @@ import cpw.mods.fml.common.FMLCommonHandler;
  * 场域合成站的结果槽。取走成品时：
  * <ol>
  * <li>像普通工作台一样从网格里消耗材料；</li>
- * <li>剩余物（空桶等）先进玩家背包，放不下再放回邻近容器；</li>
- * <li>被用光的网格格子，按玩家背包优先、邻近容器其次的顺序补充同种材料。</li>
+ * <li>剩余物（空桶等）先进玩家背包，放不下再放回邻近容器。</li>
  * </ol>
- * 邻近容器只在服务端、供电正常时才会参与。
+ * 被用光的格子不会补料，所以 Shift+点击只消耗网格里摆着的材料。邻近容器只在服务端、供电正常时才会接收剩余物。
  */
 public class FieldCraftingSlot extends ModularCraftingSlot {
 
@@ -39,6 +38,13 @@ public class FieldCraftingSlot extends ModularCraftingSlot {
         this.matrix = craftMatrix;
     }
 
+    /** 和原版结果槽一样，成品总是整组取走，否则没取走的部分会被下一次配方计算覆盖而丢失。 */
+    @Override
+    public ItemStack decrStackSize(int amount) {
+        ItemStack stack = getStack();
+        return super.decrStackSize(stack == null ? amount : stack.stackSize);
+    }
+
     @Override
     public void onPickupFromSlot(EntityPlayer player, ItemStack stack) {
         FMLCommonHandler.instance()
@@ -47,13 +53,10 @@ public class FieldCraftingSlot extends ModularCraftingSlot {
 
         boolean server = !player.worldObj.isRemote;
         FieldInventory field = server ? tile.createFieldInventory(player) : null;
-        int size = TileFieldStation.GRID_SIZE;
-        ItemStack[] used = new ItemStack[size];
 
-        for (int i = 0; i < size; i++) {
+        for (int i = 0; i < TileFieldStation.GRID_SIZE; i++) {
             ItemStack inSlot = matrix.getStackInSlot(i);
             if (Platform.isStackEmpty(inSlot)) continue;
-            used[i] = inSlot.copy();
             matrix.decrStackSize(i, 1, false);
 
             if (!inSlot.getItem()
@@ -77,16 +80,6 @@ public class FieldCraftingSlot extends ModularCraftingSlot {
             }
         }
 
-        if (server) {
-            for (int i = 0; i < size; i++) {
-                if (used[i] == null || !Platform.isStackEmpty(matrix.getStackInSlot(i))) continue;
-                ItemStack refill = field.consumeMaterial(used[i], 1);
-                if (refill != null) matrix.setSlot(i, refill, false);
-            }
-        }
         matrix.notifyContainer();
-        if (server && matrix.getContainer() instanceof FieldStationContainer container) {
-            container.forceSyncGrid();
-        }
     }
 }
