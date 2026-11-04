@@ -12,3 +12,7 @@ fieldcrafting.gui.view.summary=All
 fieldcrafting.gui.view.summary.tip=Summary view: identical items from all containers are merged
 fieldcrafting.gui.view.container=Each
 fieldcrafting.gui.view.container.tip=Per-container view: browse one container at a time
+fieldcrafting.gui.tweak.rotate=Rotate grid
+fieldcrafting.gui.tweak.balance=Balance grid (Shift+click: spread to empty slots)
+fieldcrafting.gui.tweak.to_player=Return grid items to inventory
+fieldcrafting.gui.tweak.to_field=Return grid items to nearby containers

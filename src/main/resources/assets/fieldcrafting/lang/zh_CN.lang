@@ -12,3 +12,7 @@ fieldcrafting.gui.view.summary=汇总
 fieldcrafting.gui.view.summary.tip=汇总视图：所有容器里的同种物品合并显示
 fieldcrafting.gui.view.container=容器
 fieldcrafting.gui.view.container.tip=分容器视图：逐个查看单个容器的内容
+fieldcrafting.gui.tweak.rotate=旋转网格
+fieldcrafting.gui.tweak.balance=均分网格（Shift+点击：平铺到空格）
+fieldcrafting.gui.tweak.to_player=把网格里的物品取回背包
+fieldcrafting.gui.tweak.to_field=把网格里的物品放回邻近容器

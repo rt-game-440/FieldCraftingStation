@@ -44,6 +44,7 @@ public class FieldListSync extends SyncHandler<FieldListSync> {
     private static final int ID_SET_FILTER = 6; // C2S
     private static final int ID_SET_SCROLL = 7; // C2S
     private static final int ID_CLIENT_READY = 8; // C2S：客户端界面已就绪，请求完整同步
+    private static final int ID_GRID_ACTION = 9; // C2S：网格快捷操作（旋转、均分、平铺、清空）
 
     /** {@link Click} 的目标容器已不在范围内时用的下标，取出和存入都会失败，物品退还给玩家。 */
     private static final int CONTAINER_GONE = Integer.MAX_VALUE;
@@ -196,6 +197,11 @@ public class FieldListSync extends SyncHandler<FieldListSync> {
     public void sendCraft(ItemStack[][] candidates, int crafts) {
         lastCraftResult = -1;
         sendCandidates(ID_CRAFT, candidates, crafts);
+    }
+
+    /** 请求服务端执行网格快捷操作，取值见 {@link FieldStationContainer}。 */
+    public void sendGridAction(int action) {
+        syncToServer(ID_GRID_ACTION, buf -> buf.writeByte(action));
     }
 
     /** 最近一次 {@link #sendCraft} 实际完成的次数；服务端还没应答时为 -1。 */
@@ -440,6 +446,12 @@ public class FieldListSync extends SyncHandler<FieldListSync> {
                 refreshNow();
                 if (player.openContainer instanceof FieldStationContainer container) {
                     container.resyncToPlayer(player);
+                }
+            }
+            case ID_GRID_ACTION -> {
+                int action = buf.readByte();
+                if (player.openContainer instanceof FieldStationContainer container) {
+                    container.applyGridAction(player, action);
                 }
             }
             case ID_SET_VIEW -> {

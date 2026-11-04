@@ -19,6 +19,7 @@ import com.cleanroommc.modularui.screen.ModularContainer;
 import com.cleanroommc.modularui.widgets.slot.InventoryCraftingWrapper;
 import com.cleanroommc.modularui.widgets.slot.ModularSlot;
 import com.rtgame.fieldcrafting.field.FieldInventory;
+import com.rtgame.fieldcrafting.field.GridTweaks;
 import com.rtgame.fieldcrafting.field.Stacks;
 import com.rtgame.fieldcrafting.station.TileFieldStation;
 
@@ -31,6 +32,13 @@ import codechicken.nei.recipe.IRecipeHandler;
  * 场域合成站的容器：3×3 合成、结果槽，以及与物品清单、NEI "+" 的联动。
  */
 public class FieldStationContainer extends ModularContainer implements INEIRecipeTransfer<GuiContainer> {
+
+    /** 网格快捷操作。 */
+    public static final int GRID_ROTATE = 0;
+    public static final int GRID_BALANCE = 1;
+    public static final int GRID_SPREAD = 2;
+    public static final int GRID_TO_PLAYER = 3;
+    public static final int GRID_TO_FIELD = 4;
 
     private static final String[] NEI_IDENTS = { "crafting" };
     /** NEI 合成配方里 3×3 网格第一格的相对位置与格距。 */
@@ -104,6 +112,30 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
     @Override
     public void onCraftMatrixChanged(@NotNull IInventory inventory) {
         refreshResult();
+    }
+
+    // ---------------------------------------------------------------- 网格快捷操作
+
+    /** 服务端：执行网格快捷操作。清空时放不下的物品留在格子里；断电时邻近容器不接收物品。 */
+    public void applyGridAction(EntityPlayer player, int action) {
+        if (player.worldObj.isRemote || listSync == null) return;
+        ItemStack[] grid = new ItemStack[TileFieldStation.GRID_SIZE];
+        for (int i = 0; i < grid.length; i++) grid[i] = tile.getGrid()
+            .getStackInSlot(i);
+        FieldInventory field = tile.createFieldInventory(player);
+        ItemStack[] out = switch (action) {
+            case GRID_ROTATE -> GridTweaks.rotate(grid);
+            case GRID_BALANCE -> GridTweaks.balance(grid);
+            case GRID_SPREAD -> GridTweaks.spread(grid);
+            case GRID_TO_PLAYER -> GridTweaks.clear(grid, field::giveToPlayerOnly);
+            case GRID_TO_FIELD -> GridTweaks.clear(grid, stack -> listSync.store(player, stack));
+            default -> grid;
+        };
+        for (int i = 0; i < out.length; i++) tile.getGrid()
+            .setStackInSlot(i, out[i]);
+        craftMatrix.notifyContainer();
+        listSync.refreshNow();
+        resyncToPlayer(player);
     }
 
     // ---------------------------------------------------------------- 点击物品清单里的格子

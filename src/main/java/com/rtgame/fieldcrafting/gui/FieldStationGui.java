@@ -2,9 +2,12 @@ package com.rtgame.fieldcrafting.gui;
 
 import java.util.List;
 
+import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.util.EnumChatFormatting;
 
 import com.cleanroommc.modularui.api.drawable.IKey;
+import com.cleanroommc.modularui.drawable.UITexture;
 import com.cleanroommc.modularui.factory.PosGuiData;
 import com.cleanroommc.modularui.screen.ModularPanel;
 import com.cleanroommc.modularui.screen.UISettings;
@@ -16,6 +19,7 @@ import com.cleanroommc.modularui.widgets.TextWidget;
 import com.cleanroommc.modularui.widgets.slot.ItemSlot;
 import com.cleanroommc.modularui.widgets.slot.ModularSlot;
 import com.cleanroommc.modularui.widgets.textfield.TextFieldWidget;
+import com.rtgame.fieldcrafting.FieldCrafting;
 import com.rtgame.fieldcrafting.station.TileFieldStation;
 
 /** 场域合成站界面：左侧是邻近容器的物品清单，右侧是 3×3 合成网格与玩家背包。 */
@@ -24,6 +28,13 @@ public final class FieldStationGui {
     private static final int WIDTH = 354;
     private static final int HEIGHT = 200;
     private static final int RIGHT = 185;
+    private static final int TWEAK_SIZE = 14;
+    /** 快捷按钮列的左边。按钮、网格、结果槽整体在背包宽度内水平居中。 */
+    private static final int TWEAK_X = RIGHT + 24;
+    /** 合成网格左上角，在标题与背包之间垂直居中。 */
+    private static final int GRID_X = TWEAK_X + 18;
+    private static final int GRID_Y = 41;
+    private static final float POWER_TEXT_SCALE = 0.75f;
 
     private FieldStationGui() {}
 
@@ -99,20 +110,46 @@ public final class FieldStationGui {
                 int index = row * 3 + col;
                 panel.child(
                     new ItemSlot().slot(new ModularSlot(tile.getGrid(), index))
-                        .pos(RIGHT + 8 + col * 18, 24 + row * 18));
+                        .pos(GRID_X + col * 18, GRID_Y + row * 18));
             }
         }
         panel.child(
             new ItemSlot().slot(new FieldCraftingSlot(tile.getGrid(), TileFieldStation.GRID_SIZE, tile))
-                .pos(RIGHT + 8 + 3 * 18 + 28, 24 + 18));
+                .pos(GRID_X + 3 * 18 + 24, GRID_Y + 18));
         panel.child(
-            new TextWidget<>(IKey.dynamic(() -> powerText(list))).pos(RIGHT + 8 + 3 * 18 + 8, 24 + 3 * 18 + 2)
+            new TextWidget<>(IKey.dynamic(() -> powerText(list))).scale(POWER_TEXT_SCALE)
+                .pos(7, 190)
                 .size(100, 8));
+
+        panel.child(tweakButton(0, "rotate", () -> list.sendGridAction(FieldStationContainer.GRID_ROTATE)));
+        panel.child(
+            tweakButton(
+                1,
+                "balance",
+                () -> list.sendGridAction(
+                    GuiScreen.isShiftKeyDown() ? FieldStationContainer.GRID_SPREAD
+                        : FieldStationContainer.GRID_BALANCE)));
+        panel.child(tweakButton(2, "to_player", () -> list.sendGridAction(FieldStationContainer.GRID_TO_PLAYER)));
+        panel.child(
+            tweakButton(3, "to_field", () -> list.sendGridAction(FieldStationContainer.GRID_TO_FIELD))
+                .setEnabledIf(w -> list.isPowered()));
 
         panel.child(
             SlotGroupWidget.playerInventory(false)
                 .pos(RIGHT, 118));
         return panel;
+    }
+
+    /** 网格左侧的一个快捷按钮，从上到下排列。 */
+    private static ButtonWidget<?> tweakButton(int index, String name, Runnable action) {
+        return new ButtonWidget<>().pos(TWEAK_X, GRID_Y - 1 + index * TWEAK_SIZE)
+            .size(TWEAK_SIZE, TWEAK_SIZE)
+            .overlay(UITexture.fullImage(FieldCrafting.MODID, "gui/tweak_" + name))
+            .onMousePressed(button -> {
+                action.run();
+                return true;
+            })
+            .addTooltipLine(I18n.format("fieldcrafting.gui.tweak." + name));
     }
 
     private static void cycle(FieldListSync list, int delta) {
@@ -140,6 +177,7 @@ public final class FieldStationGui {
     }
 
     private static String powerText(FieldListSync list) {
-        return list.isPowered() ? I18n.format("fieldcrafting.gui.powered") : I18n.format("fieldcrafting.gui.unpowered");
+        return list.isPowered() ? EnumChatFormatting.DARK_GREEN + I18n.format("fieldcrafting.gui.powered")
+            : EnumChatFormatting.RED + I18n.format("fieldcrafting.gui.unpowered");
     }
 }
