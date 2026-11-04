@@ -19,7 +19,7 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
     modid = FieldCrafting.MODID,
     version = Tags.VERSION,
     name = "Field Crafting Station",
-    dependencies = "required-after:gregtech; required-after:gtnhlib; required-after:NotEnoughItems; required-after:modularui2",
+    dependencies = "required-after:gregtech; required-after:gtnhlib; required-after:NotEnoughItems",
     acceptedMinecraftVersions = "[1.7.10]")
 public class FieldCrafting {
 
@@ -36,6 +36,9 @@ public class FieldCrafting {
             return Item.getItemFromBlock(STATIONS[0]);
         }
     };
+
+    @Mod.Instance(MODID)
+    public static FieldCrafting instance;
 
     @SidedProxy(
         clientSide = "com.rtgame.fieldcrafting.ClientProxy",

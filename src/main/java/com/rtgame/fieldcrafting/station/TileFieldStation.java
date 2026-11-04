@@ -1,26 +1,20 @@
 package com.rtgame.fieldcrafting.station;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.common.util.ForgeDirection;
 
-import com.cleanroommc.modularui.api.IGuiHolder;
-import com.cleanroommc.modularui.factory.PosGuiData;
-import com.cleanroommc.modularui.screen.ModularPanel;
-import com.cleanroommc.modularui.screen.ModularScreen;
-import com.cleanroommc.modularui.screen.UISettings;
-import com.cleanroommc.modularui.utils.item.ItemStackHandler;
-import com.cleanroommc.modularui.value.sync.PanelSyncManager;
-import com.rtgame.fieldcrafting.FieldCrafting;
 import com.rtgame.fieldcrafting.field.FieldContainer;
 import com.rtgame.fieldcrafting.field.FieldInventory;
 import com.rtgame.fieldcrafting.field.FieldScanner;
-import com.rtgame.fieldcrafting.gui.FieldStationGui;
 
 import gregtech.api.interfaces.tileentity.IEnergyConnected;
 
@@ -28,19 +22,12 @@ import gregtech.api.interfaces.tileentity.IEnergyConnected;
  * 场域合成站的方块实体：作为 GT 能量接收方持续耗电，并持有 3×3 合成网格。
  * 电量不足（断电）时降级为普通工作台，不识别邻近容器。
  */
-public class TileFieldStation extends TileEntity implements IEnergyConnected, IGuiHolder<PosGuiData> {
+public class TileFieldStation extends TileEntity implements IEnergyConnected {
 
     /** 3×3 合成网格的格子数。 */
     public static final int GRID_SIZE = 9;
 
-    /** 槽位 0..8 是合成网格，槽位 9 是结果槽（只用于界面，不存档）。 */
-    private final ItemStackHandler grid = new ItemStackHandler(GRID_SIZE + 1) {
-
-        @Override
-        protected void onContentsChanged(int slot) {
-            markDirty();
-        }
-    };
+    private final ItemStack[] grid = new ItemStack[GRID_SIZE];
 
     private long stored;
     private boolean powered;
@@ -51,8 +38,13 @@ public class TileFieldStation extends TileEntity implements IEnergyConnected, IG
         return block instanceof BlockFieldStation station ? station.tier : Tier.LV;
     }
 
-    public ItemStackHandler getGrid() {
-        return grid;
+    public ItemStack getGridStack(int slot) {
+        return grid[slot];
+    }
+
+    public void setGridStack(int slot, ItemStack stack) {
+        grid[slot] = stack;
+        markDirty();
     }
 
     /** 是否供电正常（服务端实时值，客户端通过界面同步）。 */
@@ -129,7 +121,17 @@ public class TileFieldStation extends TileEntity implements IEnergyConnected, IG
         tag.setLong("Stored", stored);
         tag.setBoolean("Powered", powered);
         tag.setByte("Color", colorization);
-        tag.setTag("Grid", grid.serializeNBT());
+        NBTTagList items = new NBTTagList();
+        for (int i = 0; i < GRID_SIZE; i++) {
+            if (grid[i] == null) continue;
+            NBTTagCompound item = new NBTTagCompound();
+            item.setInteger("Slot", i);
+            grid[i].writeToNBT(item);
+            items.appendTag(item);
+        }
+        NBTTagCompound gridTag = new NBTTagCompound();
+        gridTag.setTag("Items", items);
+        tag.setTag("Grid", gridTag);
     }
 
     @Override
@@ -138,30 +140,25 @@ public class TileFieldStation extends TileEntity implements IEnergyConnected, IG
         stored = tag.getLong("Stored");
         powered = tag.getBoolean("Powered");
         colorization = tag.hasKey("Color") ? tag.getByte("Color") : -1;
-        if (tag.hasKey("Grid")) grid.deserializeNBT(tag.getCompoundTag("Grid"));
-        grid.setStackInSlot(GRID_SIZE, null); // 结果槽不保留
+        Arrays.fill(grid, null);
+        NBTTagList items = tag.getCompoundTag("Grid")
+            .getTagList("Items", Constants.NBT.TAG_COMPOUND);
+        for (int i = 0; i < items.tagCount(); i++) {
+            NBTTagCompound item = items.getCompoundTagAt(i);
+            int slot = item.getInteger("Slot");
+            if (slot >= 0 && slot < GRID_SIZE) grid[slot] = ItemStack.loadItemStackFromNBT(item);
+        }
     }
 
     /** 方块被破坏时掉落网格里的物品。 */
     public void dropContents() {
         for (int i = 0; i < GRID_SIZE; i++) {
-            ItemStack stack = grid.getStackInSlot(i);
+            ItemStack stack = grid[i];
             if (stack != null && stack.stackSize > 0) {
                 BlockFieldStation.dropStack(worldObj, xCoord, yCoord, zCoord, stack);
-                grid.setStackInSlot(i, null);
+                setGridStack(i, null);
             }
         }
     }
 
-    // ---------------------------------------------------------------- 界面
-
-    @Override
-    public ModularScreen createScreen(PosGuiData data, ModularPanel mainPanel) {
-        return new ModularScreen(FieldCrafting.MODID, mainPanel);
-    }
-
-    @Override
-    public ModularPanel buildUI(PosGuiData data, PanelSyncManager syncManager, UISettings settings) {
-        return FieldStationGui.build(this, data, syncManager, settings);
-    }
 }

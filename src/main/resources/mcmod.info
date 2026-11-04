@@ -10,5 +10,5 @@
 	"logoFile": "",
 	"screenshots": [],
 	"parent": "",
-	"dependencies": ["gregtech", "gtnhlib", "NotEnoughItems", "modularui2"]
+	"dependencies": ["gregtech", "gtnhlib", "NotEnoughItems"]
 }]

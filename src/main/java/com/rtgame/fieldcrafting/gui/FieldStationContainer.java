@@ -2,36 +2,24 @@ package com.rtgame.fieldcrafting.gui;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Predicate;
 
-import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.inventory.IInventory;
+import net.minecraft.inventory.ContainerWorkbench;
+import net.minecraft.inventory.ICrafting;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.crafting.CraftingManager;
 
-import org.jetbrains.annotations.NotNull;
-
-import com.cleanroommc.modularui.integration.nei.INEIRecipeTransfer;
-import com.cleanroommc.modularui.screen.ModularContainer;
-import com.cleanroommc.modularui.widgets.slot.InventoryCraftingWrapper;
-import com.cleanroommc.modularui.widgets.slot.ModularSlot;
 import com.rtgame.fieldcrafting.field.FieldInventory;
 import com.rtgame.fieldcrafting.field.GridTweaks;
 import com.rtgame.fieldcrafting.field.Stacks;
 import com.rtgame.fieldcrafting.station.TileFieldStation;
 
-import codechicken.nei.PositionedStack;
-import codechicken.nei.ServerSync;
-import codechicken.nei.recipe.GuiOverlayButton;
-import codechicken.nei.recipe.IRecipeHandler;
-
 /**
- * 场域合成站的容器：3×3 合成、结果槽，以及与物品清单、NEI "+" 的联动。
+ * 场域合成站的容器，继承原版工作台：槽位 0 是结果，1..9 是网格，10..45 是玩家背包，下标与原版完全一致，
+ * 其他 mod 按原版工作台处理就能用。物品清单的格子排在后面。
  */
-public class FieldStationContainer extends ModularContainer implements INEIRecipeTransfer<GuiContainer> {
+public class FieldStationContainer extends ContainerWorkbench {
 
     /** 网格快捷操作。 */
     public static final int GRID_ROTATE = 0;
@@ -40,197 +28,206 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
     public static final int GRID_TO_PLAYER = 3;
     public static final int GRID_TO_FIELD = 4;
 
-    private static final String[] NEI_IDENTS = { "crafting" };
-    /** NEI 合成配方里 3×3 网格第一格的相对位置与格距。 */
-    private static final int NEI_ORIGIN_X = 25;
-    private static final int NEI_ORIGIN_Y = 6;
-    private static final int NEI_SPACING = 18;
-    /** 每格发给服务端的候选物品上限，避免数据包过大。真正有货的候选排在前面，不会被截掉。 */
-    private static final int MAX_CANDIDATES = 16;
+    public static final int RESULT_SLOT = 0;
+    public static final int FIRST_GRID_SLOT = 1;
+    public static final int FIRST_PLAYER_SLOT = 10;
+    public static final int FIRST_CELL_SLOT = 46;
+
     private static final int MODE_PICKUP = 0;
-    private static final int HOTBAR_SIZE = 9;
+    private static final double MAX_DISTANCE_SQ = 64.0;
     /** 一次请求最多合成的次数，与 NEI 合成链每次请求的上限相同。 */
     private static final int MAX_CRAFTS_PER_REQUEST = 64;
 
     private final TileFieldStation tile;
-    private final InventoryCraftingWrapper craftMatrix;
-    private FieldCraftingSlot craftingSlot;
-    private FieldListSync listSync;
-    private boolean lastPowered;
+    private final EntityPlayer player;
+    private final FieldCraftMatrix matrix;
+    private final FieldCraftingSlot craftingSlot;
+    private final FieldListSync listSync;
+    private final ItemStack[] lastGrid = new ItemStack[TileFieldStation.GRID_SIZE];
 
-    public FieldStationContainer(TileFieldStation tile) {
+    public FieldStationContainer(EntityPlayer player, TileFieldStation tile) {
+        super(player.inventory, player.worldObj, tile.xCoord, tile.yCoord, tile.zCoord);
         this.tile = tile;
-        this.craftMatrix = new InventoryCraftingWrapper(this, 3, 3, tile.getGrid(), 0);
-    }
+        this.player = player;
+        this.matrix = new FieldCraftMatrix(this, tile);
+        this.craftMatrix = matrix;
 
-    public void setListSync(FieldListSync listSync) {
-        this.listSync = listSync;
-    }
-
-    // ---------------------------------------------------------------- 合成
-
-    @Override
-    public void registerSlot(String panelName, ModularSlot slot) {
-        super.registerSlot(panelName, slot);
-        if (slot instanceof FieldCraftingSlot crafting) {
-            this.craftingSlot = crafting;
-            crafting.setCraftMatrix(this.craftMatrix);
+        // 原版的结果槽和网格槽绑在它自己的网格上，换成绑定站内网格的，坐标由界面设置
+        this.craftingSlot = new FieldCraftingSlot(player, tile, matrix, craftResult, 0, 0);
+        replaceSlot(RESULT_SLOT, craftingSlot);
+        for (int i = 0; i < TileFieldStation.GRID_SIZE; i++) {
+            replaceSlot(FIRST_GRID_SLOT + i, new Slot(matrix, i, 0, 0));
         }
+
+        this.listSync = new FieldListSync(tile, player, () -> windowId);
+        for (int i = 0; i < FieldListView.SIZE; i++) {
+            addSlotToContainer(new FieldListSlot(listSync.cells(), i));
+        }
+        onCraftMatrixChanged(matrix);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void replaceSlot(int index, Slot slot) {
+        slot.slotNumber = index;
+        inventorySlots.set(index, slot);
+    }
+
+    public FieldListSync sync() {
+        return listSync;
+    }
+
+    /** 站名的语言键。 */
+    public String titleKey() {
+        return "tile.fieldcrafting.station." + tile.getTier().id + ".name";
     }
 
     @Override
-    public void onModularContainerOpened() {
-        super.onModularContainerOpened();
-        refreshResult();
+    public boolean canInteractWith(EntityPlayer who) {
+        return who.worldObj.getTileEntity(tile.xCoord, tile.yCoord, tile.zCoord) == tile
+            && who.getDistanceSq(tile.xCoord + 0.5, tile.yCoord + 0.5, tile.zCoord + 0.5) <= MAX_DISTANCE_SQ;
     }
 
+    // ---------------------------------------------------------------- 同步
+
+    /** 清单格子不走原版同步：客户端自己按快照摆，否则每次滚动都要发一遍所有格子。 */
     @Override
+    @SuppressWarnings("unchecked")
     public void detectAndSendChanges() {
-        super.detectAndSendChanges();
-        // 检测合成网格被界面外的操作改动（如 NEI 填充之外的途径）
-        craftMatrix.detectChanges();
-        // 断电 / 来电时结果槽按当前状态重新计算
-        if (!getPlayer().worldObj.isRemote) {
-            boolean powered = tile.isPowered();
-            if (powered != lastPowered) {
-                lastPowered = powered;
-                refreshResult();
+        for (int i = 0; i < FIRST_CELL_SLOT; i++) {
+            ItemStack now = ((Slot) inventorySlots.get(i)).getStack();
+            ItemStack sent = (ItemStack) inventoryItemStacks.get(i);
+            if (ItemStack.areItemStacksEqual(sent, now)) continue;
+            sent = now == null ? null : now.copy();
+            inventoryItemStacks.set(i, sent);
+            for (Object crafter : crafters) {
+                ((ICrafting) crafter).sendSlotContents(this, i, sent);
             }
         }
-    }
-
-    private void refreshResult() {
-        if (craftingSlot == null || getPlayer() == null || getPlayer().worldObj.isRemote) return;
-        // 网格包装的第 10 格就是结果槽，部分配方（如染色盔甲）遍历全部格子，旧成品不能参与匹配
-        tile.getGrid()
-            .setStackInSlot(TileFieldStation.GRID_SIZE, null);
-        craftingSlot.updateResult(
-            CraftingManager.getInstance()
-                .findMatchingRecipe(craftMatrix, getPlayer().worldObj));
+        if (player.worldObj.isRemote) return;
+        sync().detectAndSendChanges();
+        // 同一个站可能被别的玩家改了网格，这边的结果槽也要跟着变
+        boolean changed = false;
+        for (int i = 0; i < lastGrid.length; i++) {
+            ItemStack now = tile.getGridStack(i);
+            if (!ItemStack.areItemStacksEqual(lastGrid[i], now)) {
+                lastGrid[i] = now == null ? null : now.copy();
+                changed = true;
+            }
+        }
+        if (changed) onCraftMatrixChanged(matrix);
     }
 
     @Override
-    public void onCraftMatrixChanged(@NotNull IInventory inventory) {
-        refreshResult();
+    @SuppressWarnings("unchecked")
+    public List<ItemStack> getInventory() {
+        List<ItemStack> all = new ArrayList<>(super.getInventory());
+        for (int i = FIRST_CELL_SLOT; i < all.size(); i++) all.set(i, null);
+        return all;
+    }
+
+    @Override
+    public void putStacksInSlots(ItemStack[] stacks) {
+        for (int i = 0; i < stacks.length && i < FIRST_CELL_SLOT; i++) {
+            getSlot(i).putStack(stacks[i]);
+        }
     }
 
     // ---------------------------------------------------------------- 网格快捷操作
 
     /** 服务端：执行网格快捷操作。清空时放不下的物品留在格子里；断电时邻近容器不接收物品。 */
-    public void applyGridAction(EntityPlayer player, int action) {
-        if (player.worldObj.isRemote || listSync == null) return;
+    public void applyGridAction(EntityPlayer who, int action) {
+        if (who.worldObj.isRemote) return;
         ItemStack[] grid = new ItemStack[TileFieldStation.GRID_SIZE];
-        for (int i = 0; i < grid.length; i++) grid[i] = tile.getGrid()
-            .getStackInSlot(i);
-        FieldInventory field = tile.createFieldInventory(player);
+        for (int i = 0; i < grid.length; i++) grid[i] = tile.getGridStack(i);
+        FieldInventory field = tile.createFieldInventory(who);
         ItemStack[] out = switch (action) {
             case GRID_ROTATE -> GridTweaks.rotate(grid);
             case GRID_BALANCE -> GridTweaks.balance(grid);
             case GRID_SPREAD -> GridTweaks.spread(grid);
             case GRID_TO_PLAYER -> GridTweaks.clear(grid, field::giveToPlayerOnly);
-            case GRID_TO_FIELD -> GridTweaks.clear(grid, stack -> listSync.store(player, stack));
+            case GRID_TO_FIELD -> GridTweaks.clear(grid, stack -> sync().store(who, stack));
             default -> grid;
         };
-        for (int i = 0; i < out.length; i++) tile.getGrid()
-            .setStackInSlot(i, out[i]);
-        craftMatrix.notifyContainer();
-        listSync.refreshNow();
-        resyncToPlayer(player);
+        for (int i = 0; i < out.length; i++) matrix.setQuietly(i, out[i]);
+        matrix.notifyChanged();
+        sync().refreshNow();
+        resyncToPlayer(who);
     }
 
-    // ---------------------------------------------------------------- 点击物品清单里的格子
+    // ---------------------------------------------------------------- 点击
 
     /**
      * 清单格子是真实的原版槽位，点击完全走原版逻辑。服务端在点击前后对账：格子被取走的物品从真实容器扣除，
      * 放进格子的物品存进真实容器（见 {@link FieldListSync#beginClick}）。
      */
     @Override
-    public ItemStack slotClick(int slotId, int mouseButton, int mode, EntityPlayer player) {
-        boolean validSlot = slotId >= 0 && slotId < inventorySlots.size();
-        Slot clicked = validSlot ? (Slot) inventorySlots.get(slotId) : null;
-        if (clicked != null && clicked == craftingSlot && mode == MODE_PICKUP) {
-            mouseButton = 0; // 和原版结果槽一样，右键也取走整组成品
+    public ItemStack slotClick(int slotId, int mouseButton, int mode, EntityPlayer who) {
+        if (slotId >= inventorySlots.size()) return null;
+        Slot clicked = slotId >= 0 ? (Slot) inventorySlots.get(slotId) : null;
+        if (clicked == craftingSlot && mode == MODE_PICKUP) {
+            mouseButton = 0; // 右键也取走整组成品，否则没取走的部分会被下一次配方计算覆盖而丢失
         }
         boolean isDeposit = clicked instanceof FieldListSlot && mode == MODE_PICKUP
-            && !Stacks.isEmpty(player.inventory.getItemStack());
+            && !Stacks.isEmpty(who.inventory.getItemStack());
 
-        if (player.worldObj.isRemote) {
-            return isDeposit ? null : super.slotClick(slotId, mouseButton, mode, player); // 存入不预测，等服务端同步
+        if (who.worldObj.isRemote) {
+            return isDeposit ? null : super.slotClick(slotId, mouseButton, mode, who); // 存入不预测，等服务端同步
         }
-        if (listSync == null) return super.slotClick(slotId, mouseButton, mode, player);
+        FieldListSync list = sync();
         if (isDeposit) {
-            listSync.depositCursor(player, mouseButton);
-            resyncToPlayer(player);
+            list.depositCursor(who, mouseButton);
+            resyncToPlayer(who);
             return null;
         }
 
-        FieldListSync.Click click = listSync.beginClick();
+        FieldListSync.Click click = list.beginClick();
         ItemStack result;
         try {
-            result = super.slotClick(slotId, mouseButton, mode, player);
+            result = super.slotClick(slotId, mouseButton, mode, who);
         } catch (RuntimeException | Error e) {
-            listSync.abortClick();
+            list.abortClick();
             throw e;
         }
-        listSync.finishClick(player, click);
+        list.finishClick(who, click);
         // 原版在点击之后的变化检测处于"静默"状态，且客户端的预测可能与服务端不同，所以每次点击后都完整同步
-        resyncToPlayer(player);
+        resyncToPlayer(who);
         return result;
-    }
-
-    /** 双击收集同种物品时不能把结果槽算进去，否则会触发合成。 */
-    @Override
-    public boolean func_94530_a(ItemStack stack, Slot slot) {
-        return slot != craftingSlot && super.func_94530_a(stack, slot);
     }
 
     // ---------------------------------------------------------------- Shift+点击
 
     @Override
-    public ItemStack transferStackInSlot(@NotNull EntityPlayer player, int index) {
-        ModularSlot slot = getModularSlot(index);
-        if (slot instanceof FieldListSlot) return quickMoveToPlayer(slot, target -> true);
-        boolean powered = player.worldObj.isRemote ? listSync != null && listSync.isPowered() : tile.isPowered();
-        // 断电时降级为普通工作台，Shift+点击走默认逻辑
-        if (powered && ModularSlot.isPlayerSlot(slot) && listSync != null) {
-            if (player.worldObj.isRemote) return null; // 客户端不预测，等服务端同步
+    public ItemStack transferStackInSlot(EntityPlayer who, int index) {
+        Slot slot = (Slot) inventorySlots.get(index);
+        if (slot instanceof FieldListSlot) return quickMoveToPlayer(slot);
+        boolean powered = who.worldObj.isRemote ? listSync.isPowered() : tile.isPowered();
+        if (powered && index >= FIRST_PLAYER_SLOT && index < FIRST_CELL_SLOT) {
+            if (who.worldObj.isRemote) return null; // 客户端不预测，等服务端同步
             ItemStack stack = slot.getStack();
             if (Stacks.isEmpty(stack)) return null;
-            ItemStack rest = listSync.store(player, stack.copy());
+            ItemStack rest = sync().store(who, stack.copy());
             int moved = stack.stackSize - (rest == null ? 0 : rest.stackSize);
             if (moved <= 0) return null;
             ItemStack copy = stack.copy();
             slot.putStack(rest);
             return copy;
         }
-        // 和普通工作台一样，背包里的物品在主物品栏与快捷栏之间移动
-        if (ModularSlot.isPlayerSlot(slot)) {
-            boolean fromHotbar = slot.getSlotIndex() < HOTBAR_SIZE;
-            return quickMoveToPlayer(slot, target -> target.getSlotIndex() < HOTBAR_SIZE != fromHotbar);
-        }
-        return super.transferStackInSlot(player, index);
+        // 结果槽、网格，以及断电时的背包，都和原版工作台一样
+        return super.transferStackInSlot(who, index);
     }
 
     /**
-     * 把 slot 里的物品挪进玩家背包里满足条件的格子，先并入同种物品，再放进空格。
+     * 把清单格子里的物品挪进玩家背包，先并入同种物品，再放进空格，顺序和原版工作台一样从后往前。
      * 两端用同一套确定的规则，客户端的预测与服务端一致。
      */
-    private ItemStack quickMoveToPlayer(ModularSlot slot, Predicate<ModularSlot> allowed) {
+    private ItemStack quickMoveToPlayer(Slot slot) {
         ItemStack stack = slot.getStack();
-        if (Stacks.isEmpty(stack) || !slot.canTakeStack(getPlayer())) return null;
+        if (Stacks.isEmpty(stack) || !slot.canTakeStack(player)) return null;
         ItemStack copy = stack.copy();
         ItemStack rest = stack.copy();
-        List<ModularSlot> targets = new ArrayList<>();
-        for (Object o : inventorySlots) {
-            if (o instanceof ModularSlot candidate && candidate != slot
-                && ModularSlot.isPlayerSlot(candidate)
-                && allowed.test(candidate)) {
-                targets.add(candidate);
-            }
-        }
         for (int pass = 0; pass < 2 && rest.stackSize > 0; pass++) {
-            for (int i = targets.size() - 1; i >= 0 && rest.stackSize > 0; i--) {
-                ModularSlot target = targets.get(i);
+            for (int i = FIRST_CELL_SLOT - 1; i >= FIRST_PLAYER_SLOT && rest.stackSize > 0; i--) {
+                Slot target = (Slot) inventorySlots.get(i);
                 ItemStack inSlot = target.getStack();
                 int limit = Math.min(rest.getMaxStackSize(), target.getSlotStackLimit());
                 if (pass == 0) {
@@ -253,102 +250,7 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
         return copy;
     }
 
-    // ---------------------------------------------------------------- NEI "+"
-
-    @Override
-    public String[] getIdents() {
-        return NEI_IDENTS;
-    }
-
-    /**
-     * 把 NEI 配方换算成每格的候选物品；配方里没有能放进 3×3 网格的材料时返回 null。
-     * 优先列出玩家实际拥有的物品（带真实的损伤值和 NBT），否则磨损的工具等会因与配方样本不全等而填不上。
-     */
-    private ItemStack[][] buildCandidates(GuiContainer gui, IRecipeHandler recipe, int recipeIndex) {
-        List<ItemStack> available = availableMaterials(gui);
-        ItemStack[][] candidates = new ItemStack[TileFieldStation.GRID_SIZE][];
-        boolean any = false;
-        List<PositionedStack> ingredients = recipe.getIngredientStacks(recipeIndex);
-        for (PositionedStack ingredient : ingredients) {
-            int col = Math.round((ingredient.relx - NEI_ORIGIN_X) / (float) NEI_SPACING);
-            int row = Math.round((ingredient.rely - NEI_ORIGIN_Y) / (float) NEI_SPACING);
-            if (col < 0 || col > 2 || row < 0 || row > 2) continue;
-            List<ItemStack> options = new ArrayList<>();
-            for (ItemStack have : available) {
-                if (ingredient.contains(have)) addCandidate(options, have);
-            }
-            if (ingredient.items != null) {
-                for (ItemStack option : ingredient.items) {
-                    if (option != null) addCandidate(options, option);
-                }
-            }
-            if (options.isEmpty()) continue;
-            candidates[row * 3 + col] = options.toArray(new ItemStack[0]);
-            any = true;
-        }
-        return any ? candidates : null;
-    }
-
-    private static void addCandidate(List<ItemStack> options, ItemStack stack) {
-        if (options.size() < MAX_CANDIDATES && indexOf(options, stack) < 0) options.add(Stacks.copyWithSize(stack, 1));
-    }
-
-    /** 配方是否至少有一种材料落在 3×3 网格内。 */
-    private static boolean fitsGrid(IRecipeHandler recipe, int recipeIndex) {
-        for (PositionedStack ingredient : recipe.getIngredientStacks(recipeIndex)) {
-            int col = Math.round((ingredient.relx - NEI_ORIGIN_X) / (float) NEI_SPACING);
-            int row = Math.round((ingredient.rely - NEI_ORIGIN_Y) / (float) NEI_SPACING);
-            if (col >= 0 && col <= 2 && row >= 0 && row <= 2) return true;
-        }
-        return false;
-    }
-
-    @Override
-    public int transferRecipe(GuiContainer gui, IRecipeHandler recipe, int recipeIndex, int multiplier) {
-        if (listSync == null) return 0;
-        ItemStack[][] candidates = buildCandidates(gui, recipe, recipeIndex);
-        if (candidates == null) return 0;
-        listSync.sendFill(candidates, multiplier);
-        return 1;
-    }
-
-    // ---------------------------------------------------------------- NEI 合成链（自动合成）
-
-    @Override
-    public boolean canCraft(GuiContainer gui, IRecipeHandler recipe, int recipeIndex) {
-        if (listSync == null || craftingSlot == null || !fitsGrid(recipe, recipeIndex)) return false;
-        for (GuiOverlayButton.ItemOverlayState state : presenceOverlay(gui, recipe, recipeIndex)) {
-            if (!state.isPresent()) return false;
-        }
-        return true;
-    }
-
-    /**
-     * NEI 合成链自动合成：请求服务端填充并精确合成 multiplier 次，成品进玩家背包，然后等服务端处理完成。
-     * 此方法运行在 NEI 的后台任务线程，阻塞等待是允许的。
-     *
-     * @return 服务端是否真的合成了。一次也没合成时必须返回 false，否则 NEI 会认为有进展而一直重试
-     */
-    @Override
-    public boolean craft(GuiContainer gui, IRecipeHandler recipe, int recipeIndex, int multiplier) {
-        if (listSync == null) return false;
-        ItemStack[][] candidates = buildCandidates(gui, recipe, recipeIndex);
-        if (candidates == null) return false;
-        listSync.sendCraft(candidates, Math.max(1, multiplier));
-        ServerSync.request();
-        long deadline = System.currentTimeMillis() + 5000;
-        try {
-            while ((ServerSync.pending() || listSync.getLastCraftResult() < 0) && gui.mc.currentScreen == gui
-                && System.currentTimeMillis() < deadline) {
-                Thread.sleep(5);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread()
-                .interrupt();
-            return false;
-        }
-        return gui.mc.currentScreen == gui && listSync.getLastCraftResult() > 0;
-    }
+    // ---------------------------------------------------------------- NEI 合成链
 
     /**
      * 服务端：填充网格后精确合成 crafts 次，成品放进玩家背包，最后把网格清空，并把容器完整同步给客户端。
@@ -358,10 +260,10 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
      *
      * @return 实际合成的次数
      */
-    public int craftExact(EntityPlayer player, ItemStack[][] candidates, int requested) {
-        if (player.worldObj.isRemote || craftingSlot == null) return 0;
+    public int craftExact(EntityPlayer who, ItemStack[][] candidates, int requested) {
+        if (who.worldObj.isRemote) return 0;
         int crafts = Math.max(1, Math.min(requested, MAX_CRAFTS_PER_REQUEST));
-        FieldInventory field = tile.createFieldInventory(player);
+        FieldInventory field = tile.createFieldInventory(who);
         clearGrid(field);
         int done = 0;
         boolean full = false;
@@ -371,27 +273,27 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
             while (done < crafts && !Stacks.isEmpty(craftingSlot.getStack())) {
                 ItemStack out = craftingSlot.getStack()
                     .copy();
-                craftingSlot.onPickupFromSlot(player, out);
+                craftingSlot.onPickupFromSlot(who, out);
                 done++;
                 ItemStack rest = field.giveToPlayerOrField(out);
                 if (rest != null) {
-                    player.dropPlayerItemWithRandomChoice(rest, false);
+                    who.dropPlayerItemWithRandomChoice(rest, false);
                     full = true;
                     break;
                 }
             }
         }
         clearGrid(field);
-        craftMatrix.notifyContainer();
-        if (listSync != null) listSync.refreshNow();
-        resyncToPlayer(player);
+        matrix.notifyChanged();
+        sync().refreshNow();
+        resyncToPlayer(who);
         return done;
     }
 
     /** 把整个容器（含光标物品）重新发给玩家。用于原版变化检测会被"静默"的场合。 */
-    public void resyncToPlayer(EntityPlayer player) {
-        if (player instanceof EntityPlayerMP mp) {
-            mp.sendContainerAndContentsToPlayer(this, this.getInventory());
+    public void resyncToPlayer(EntityPlayer who) {
+        if (who instanceof EntityPlayerMP mp) {
+            mp.sendContainerAndContentsToPlayer(this, getInventory());
         }
     }
 
@@ -401,9 +303,9 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
      *
      * @param multiplier 每格的份数；NEI 的 Shift+"+" 传 0，表示按库存尽量多填
      */
-    public void fillGrid(EntityPlayer player, ItemStack[][] candidates, int multiplier) {
-        if (player.worldObj.isRemote) return;
-        FieldInventory field = tile.createFieldInventory(player);
+    public void fillGrid(EntityPlayer who, ItemStack[][] candidates, int multiplier) {
+        if (who.worldObj.isRemote) return;
+        FieldInventory field = tile.createFieldInventory(who);
         clearGrid(field);
         fillEmptySlots(field, candidates, multiplier);
     }
@@ -411,11 +313,9 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
     /** 把网格里的物品挪走（背包优先，其次邻近容器）；放不下的留在格子里。 */
     private void clearGrid(FieldInventory field) {
         for (int i = 0; i < TileFieldStation.GRID_SIZE; i++) {
-            ItemStack inSlot = tile.getGrid()
-                .getStackInSlot(i);
+            ItemStack inSlot = tile.getGridStack(i);
             if (Stacks.isEmpty(inSlot)) continue;
-            tile.getGrid()
-                .setStackInSlot(i, field.giveToPlayerOrField(inSlot.copy()));
+            matrix.setQuietly(i, field.giveToPlayerOrField(inSlot.copy()));
         }
     }
 
@@ -429,11 +329,7 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
         ItemStack[] chosen = new ItemStack[size];
         int[] chosenIndex = new int[size];
         for (int i = 0; i < size; i++) {
-            if (candidates[i] == null || !Stacks.isEmpty(
-                tile.getGrid()
-                    .getStackInSlot(i))) {
-                continue;
-            }
+            if (candidates[i] == null || !Stacks.isEmpty(tile.getGridStack(i))) continue;
             for (ItemStack candidate : candidates[i]) {
                 if (Stacks.isEmpty(candidate)) continue;
                 int idx = indexOf(samples, candidate);
@@ -466,10 +362,9 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
         for (int i = 0; i < size; i++) {
             if (chosen[i] == null) continue;
             ItemStack got = field.consumeMaterial(chosen[i], (int) amount);
-            if (got != null) tile.getGrid()
-                .setStackInSlot(i, got);
+            if (got != null) matrix.setQuietly(i, got);
         }
-        craftMatrix.notifyContainer();
+        matrix.notifyChanged();
     }
 
     private static int indexOf(List<ItemStack> samples, ItemStack stack) {
@@ -479,39 +374,24 @@ public class FieldStationContainer extends ModularContainer implements INEIRecip
         return -1;
     }
 
-    @Override
-    public List<GuiOverlayButton.ItemOverlayState> presenceOverlay(GuiContainer gui, IRecipeHandler recipe,
-        int recipeIndex) {
-        List<ItemStack> pool = availableMaterials(gui);
-        List<GuiOverlayButton.ItemOverlayState> states = new ArrayList<>();
-        for (PositionedStack ingredient : recipe.getIngredientStacks(recipeIndex)) {
-            ItemStack found = null;
-            for (ItemStack have : pool) {
-                if (have.stackSize > 0 && ingredient.contains(have)) {
-                    found = have;
-                    break;
-                }
-            }
-            states.add(new GuiOverlayButton.ItemOverlayState(ingredient, found != null));
-            if (found != null) found.stackSize -= 1;
-        }
-        return states;
-    }
-
-    /** 客户端已知的可用材料：背包 + 合成网格 + 邻近容器里能取出的物品，按背包优先排列。 */
-    private List<ItemStack> availableMaterials(GuiContainer gui) {
+    /**
+     * 客户端已知的全部可用材料：背包 + 合成网格 + 邻近容器里能取出的物品（断电时没有），按背包优先排列。
+     * 不受清单当前显示哪一屏影响。NEI 的后台线程也会调用。
+     */
+    public List<ItemStack> materials() {
         List<ItemStack> pool = new ArrayList<>();
-        for (ItemStack stack : gui.mc.thePlayer.inventory.mainInventory) {
+        for (ItemStack stack : player.inventory.mainInventory) {
             if (!Stacks.isEmpty(stack)) pool.add(stack.copy());
         }
         for (int i = 0; i < TileFieldStation.GRID_SIZE; i++) {
-            ItemStack stack = craftMatrix.getStackInSlot(i);
+            ItemStack stack = tile.getGridStack(i);
             if (!Stacks.isEmpty(stack)) pool.add(stack.copy());
         }
-        if (listSync != null && listSync.isPowered()) {
-            for (FieldListSync.Entry entry : listSync.getEntries()) {
-                if (entry.count <= 0) continue;
-                pool.add(Stacks.copyWithSize(entry.stack, (int) Math.min(entry.count, Integer.MAX_VALUE)));
+        if (listSync.isPowered()) {
+            for (FieldListLayout.Entry entry : listSync.getSummaryEntries()) {
+                if (entry.free > 0) {
+                    pool.add(Stacks.copyWithSize(entry.stack, (int) Math.min(entry.free, Integer.MAX_VALUE)));
+                }
             }
         }
         return pool;

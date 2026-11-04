@@ -13,7 +13,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.IIcon;
 import net.minecraft.world.World;
 
-import com.cleanroommc.modularui.factory.GuiFactories;
 import com.rtgame.fieldcrafting.FieldCrafting;
 
 import cpw.mods.fml.relauncher.Side;
@@ -51,8 +50,7 @@ public class BlockFieldStation extends BlockContainer {
     public boolean onBlockActivated(World world, int x, int y, int z, EntityPlayer player, int sideHit, float hitX,
         float hitY, float hitZ) {
         if (!world.isRemote) {
-            GuiFactories.tileEntity()
-                .open(player, x, y, z);
+            player.openGui(FieldCrafting.instance, 0, world, x, y, z);
         }
         return true;
     }

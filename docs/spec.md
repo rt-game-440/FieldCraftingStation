@@ -31,7 +31,9 @@ GTNH 2.9.0 正式版的附属 mod。术语见 `GLOSSARY.md`。
 
 ## 3. 物品清单
 
-合成界面旁的面板，使用 ModularUI2。
+合成界面旁的面板。界面继承原版工作台（`ContainerWorkbench`、`GuiContainer`），不使用 ModularUI2（2026-11-04 用户要求，以兼容其他 mod）。
+
+- 面板高度随屏幕变化，清单行数随之增减（最多 30 行）。滚动和搜索在客户端即时生效，每输入一个字立刻过滤。
 
 - 列出所有邻近容器里的物品，可滚动，带名称搜索框（只按物品名称过滤）。
 - 两种视图：**汇总视图**（同种物品合并）和**分容器视图**（按容器列出）。
@@ -73,10 +75,10 @@ GTNH 2.9.0 正式版的附属 mod。术语见 `GLOSSARY.md`。
 ## 6. 技术
 
 - 基于 GTNH `ExampleMod1.7.10`（Minecraft 1.7.10、Forge、Gradle）。
-- 依赖 GregTech、GTNHLib、NotEnoughItems、ModularUI2；依赖从 GTNH Maven 按实例中的版本下载，用于编译。
+- 依赖 GregTech、GTNHLib、NotEnoughItems，通过 Mixin 让 NEI 合成链统计全部邻近容器；依赖从 GTNH Maven 按实例中的版本下载，用于编译。
 - modid `fieldcrafting`，包名 `com.rtgame.fieldcrafting`。
 - 运行测试使用本地实例 `D:\mc\Prism-GTNH\instances\GTNH-2.9.0-RC-2`（实例名未改，内容已是正式版）：构建 jar 后用脚本复制到其 `.minecraft\mods`。
-- 实例中的参考版本：gregtech 5.09.54.265、gtnhlib 0.11.54、modularui2 2.3.94、NotEnoughItems 2.8.171-GTNH。
+- 实例中的参考版本：gregtech 5.09.54.265、gtnhlib 0.11.54、NotEnoughItems 2.8.171-GTNH。
 - 材质为程序生成的占位图（基于原版工作台贴图，按档位变色）；语言文件为简体中文和英文。
 
 ## 7. 待核实
@@ -101,5 +103,5 @@ GTNH 2.9.0 正式版的附属 mod。术语见 `GLOSSARY.md`。
 - 能看见但不能取出的物品（如关闭了自动输出的总线）在清单里单独成格，可见但不可取，也不计入合成可用材料。
 - 成品去向保持现状：点击结果槽进光标，Shift+点击和 NEI 合成链进背包（2026-11-04 用户确认）。
 - 合成网格左侧有快捷按钮：旋转；均分（Shift+点击为平铺到空格）；取回背包；放回邻近容器（按当前视图存入，断电时隐藏）。放不下的物品留在格子里（2026-11-04 用户提出）。
-- 支持 NEI 合成链（用户后续提出的需求）。NEI 只统计可见槽位，所以它只认当前显示在清单 72 格里的物品。
+- 支持 NEI 合成链（用户后续提出的需求）。NEI 原本只统计槽位里的物品，这里用 Mixin 改为统计背包、网格和全部邻近容器，不受清单当前显示哪一屏影响。
 

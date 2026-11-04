@@ -2,32 +2,34 @@ package com.rtgame.fieldcrafting.gui;
 
 import java.util.Arrays;
 
-import com.cleanroommc.modularui.utils.item.ItemStackHandler;
+import net.minecraft.inventory.InventoryBasic;
 
 /**
- * 物品清单的 {@value #COLUMNS}×{@value #ROWS} 个格子，本身就是一个普通的物品容器（和箱子一样）。
+ * 物品清单的格子，本身就是一个普通的物品容器（和箱子一样）。
  * <p>
- * 服务端按搜索词、滚动位置、视图把邻近容器里的物品摆进这些格子，再由 ModularUI 像同步任何原版槽位一样推给客户端；
- * 玩家对格子的点击走原版的 {@code slotClick}，服务端点击前后对账，把格子的增减落实到真实容器
- * （见 {@link FieldListSync#beginClick} / {@link FieldListSync#finishClick}）。
- * 因此 NEI 的 R / U / A、书签、合成链等依赖"槽位里真有这个物品"的功能都直接可用。
+ * 格子数按最大行数预留，界面按屏幕高度只显示其中前若干行，其余移到屏幕外。服务端按搜索词、滚动位置、视图把邻近容器里的
+ * 物品摆进格子用于对账；客户端用同一套规则（{@link FieldListLayout}）自己摆，所以滚动和搜索不用等服务端。
  */
-public class FieldListView extends ItemStackHandler {
+public class FieldListView extends InventoryBasic {
 
     public static final int COLUMNS = 9;
-    public static final int ROWS = 8;
-    public static final int SIZE = COLUMNS * ROWS;
+    public static final int MAX_ROWS = 30;
+    public static final int SIZE = COLUMNS * MAX_ROWS;
+    /** 没有显示的格子放到这个横坐标，不可能被鼠标点到。 */
+    public static final int HIDDEN_X = -10000;
 
     private boolean powered = true;
     private int totalRows;
     private int scrollRow;
+    /** 当前显示的行数。服务端不知道，按 1 算，只防止滚动位置超出总行数。 */
+    private int visibleRows = 1;
     /** 分容器视图里每格对应的容器槽位号；汇总视图和空格为 -1。仅服务端使用。 */
     private final int[] source = new int[SIZE];
     /** 哪些格子的物品只能看不能取（如关闭了自动输出的总线）。 */
     private final boolean[] locked = new boolean[SIZE];
 
     public FieldListView() {
-        super(SIZE);
+        super("", false, SIZE);
         Arrays.fill(source, -1);
     }
 
@@ -48,8 +50,17 @@ public class FieldListView extends ItemStackHandler {
         this.scrollRow = clamp(scrollRow);
     }
 
+    public int getVisibleRows() {
+        return visibleRows;
+    }
+
+    public void setVisibleRows(int rows) {
+        visibleRows = Math.max(1, Math.min(rows, MAX_ROWS));
+        scrollRow = clamp(scrollRow);
+    }
+
     public int maxScroll() {
-        return Math.max(0, totalRows - ROWS);
+        return Math.max(0, totalRows - visibleRows);
     }
 
     public int getScrollRow() {
